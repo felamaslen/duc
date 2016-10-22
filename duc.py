@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import os
+
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -7,7 +9,14 @@ import gtk
 BTN_TITLE_SCAN = "Scan!"
 BTN_TITLE_STOP = "Stop"
 
+BTN_TITLE_SELECT_DIRECTORY = "Select directory..."
+
+DEFAULT_DIRECTORY = os.path.expanduser("~/Desktop")
+
 class Base:
+    def get_dir_to_scan(self):
+        return self.btnDirSelect.get_filename()
+
     def delete_event(self, widget, event, data = None):
         return False
     def destroy(self, widget, data = None):
@@ -19,7 +28,9 @@ class Base:
             print "Aborted scan!"
         else:
             # start scanning
-            print "Scanning!"
+            dir = self.get_dir_to_scan()
+
+            print "Scanning %s" % dir
 
         self.scanning = False if self.scanning else True
 
@@ -29,6 +40,12 @@ class Base:
         self.btnStartStop.set_label(
             BTN_TITLE_STOP if self.scanning else BTN_TITLE_SCAN
         )
+
+    def selectDirectory(self, widget, data = None):
+        print "Selecting directory %s" % data
+
+    def openDirSelect(self, widget, data = None):
+        self.dirSelect.show()
 
     def __init__(self):
         self.scanning = False
@@ -41,6 +58,18 @@ class Base:
 
         self.window.set_border_width(10)
 
+        actionBox = gtk.HButtonBox()
+        actionBox.set_layout(gtk.BUTTONBOX_SPREAD)
+
+        # button to open file selection box
+        self.btnDirSelect = gtk.FileChooserButton(BTN_TITLE_SELECT_DIRECTORY)
+
+        self.btnDirSelect.set_filename(DEFAULT_DIRECTORY)
+        self.btnDirSelect.set_action(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER)
+
+        actionBox.add(self.btnDirSelect)
+        self.btnDirSelect.show()
+
         # button to scan directory
         self.btnStartStop = gtk.Button(BTN_TITLE_SCAN)
 
@@ -48,8 +77,11 @@ class Base:
             "clicked", self.startStopScan, None
         )
 
-        self.window.add(self.btnStartStop)
+        actionBox.add(self.btnStartStop)
         self.btnStartStop.show()
+
+        actionBox.show()
+        self.window.add(actionBox)
 
         self.window.show()
 
