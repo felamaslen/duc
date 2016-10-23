@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import threading
 
 import pygtk
 pygtk.require('2.0')
@@ -9,24 +10,60 @@ import gtk
 from scan import Scanner
 import tree
 
-WINDOW_WIDTH = 640
-WINDOW_HEIGHT = 500
+WINDOW_WIDTH = 1250
+WINDOW_HEIGHT = 960
 
 BTN_TITLE_SCAN = "Scan!"
 BTN_TITLE_STOP = "Stop"
-
 BTN_TITLE_SELECT_DIRECTORY = "Select directory..."
+
+BG_WINDOW = "#eee"
+
+FILE_TREE_NAME = "File tree"
+
+STATUS_IDLE = "Idle"
+STATUS_DONE = STATUS_IDLE
 
 DEFAULT_DIRECTORY = os.path.expanduser("~/Desktop")
 
 class Base:
-    def get_dir_to_scan(self):
+    def getDirToScan(self):
         return self.btnDirSelect.get_filename()
 
     def delete_event(self, widget, event, data = None):
         return False
     def destroy(self, widget, data = None):
         gtk.main_quit()
+
+    def updateTree(self, data):
+        self.treeStore.clear()
+
+        tree.addTreeData(data, self.treeStore)
+
+        self.treeView.set_model(self.treeStore)
+
+    def onScanProgress(self, item):
+        self.statusBar.set_text(item)
+
+    def doScan(self):
+        scannerThread = Scanner(
+                self.getDirToScan(),
+                self.onScanProgress,
+                self.onScanDone,
+                STATUS_DONE)
+
+        scannerThread.run()
+
+    def onScanDone(self, data):
+        self.data = data
+
+        # add data to the tree view
+        self.updateTree(self.data)
+
+        # finished scanning
+        self.scanning = False
+
+        self.setBtnStartStopLabel()
 
     def startStopScan(self, widget, data = None):
         """
@@ -38,47 +75,8 @@ class Base:
 
         if (self.scanning):
             # start scanning
-            theDir = self.get_dir_to_scan()
+            self.doScan()
 
-            print "Scanning %s" % theDir
-
-            scanner = Scanner(theDir)
-
-            scanner.scan()
-
-            # add data to the tree view
-            tree.addTreeData(scanner.tree, self.treeStore)
-
-            self.treeView = gtk.TreeView(self.treeStore)
-
-            self.tvColumn = gtk.TreeViewColumn("File name")
-
-            self.treeView.append_column(self.tvColumn)
-
-            # create a CellRenndererText to render the tree data
-            self.cell = gtk.CellRendererText()
-
-            # add the cell to the tvColumn and allow it to expand
-            self.tvColumn.pack_start(self.cell, True)
-
-            """
-            set the cell "text" attribute to column 0 - retrieve text
-            from that column in treeStore
-            """
-            self.tvColumn.add_attribute(self.cell, "text", 0)
-
-            self.treeView.set_search_column(0)
-
-            self.tvColumn.set_sort_column_id(0)
-
-            self.mainBox.pack_start(self.treeView)
-
-            self.treeView.show()
-
-            # finished scanning
-            self.scanning = False
-
-            self.setBtnStartStopLabel()
         else:
             # stop scanning
             print "Aborted scan!"
@@ -92,21 +90,7 @@ class Base:
             BTN_TITLE_STOP if self.scanning else BTN_TITLE_SCAN
         )
 
-    def __init__(self):
-        self.scanning = False
-
-        window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-
-        # window close
-        window.connect("delete_event", self.delete_event)
-        window.connect("destroy", self.destroy)
-
-        window.set_size_request(WINDOW_WIDTH, WINDOW_HEIGHT)
-        window.set_border_width(10)
-
-        self.mainBox = gtk.VBox(False, 0)
-        window.add(self.mainBox)
-
+    def addActions(self):
         actionBox = gtk.HButtonBox()
         actionBox.set_layout(gtk.BUTTONBOX_SPREAD)
 
@@ -131,15 +115,91 @@ class Base:
 
         actionBox.show()
 
-        self.mainBox.pack_start(actionBox)
+        boxActions = gtk.HBox(False, 0)
+        boxActions.add(actionBox)
+        boxActions.show()
+        self.mainBox.pack_start(boxActions, False)
+
+
+    def addTree(self):
+        # tree list view
+        self.treeStore = gtk.TreeStore(str, str)
+
+        cols = ['File', 'Size']
+        sizing = [
+            gtk.TREE_VIEW_COLUMN_FIXED,
+            gtk.TREE_VIEW_COLUMN_FIXED
+        ]
+        sequence = [str] * len(cols)
+        tvColumn = [None] * len(cols)
+
+        self.treeView = gtk.TreeView(self.treeStore)
+        self.treeView.cell = [None] * len(cols)
+
+        # add columns to the tree view
+        for i, col in enumerate(cols):
+            self.treeView.cell[i] = gtk.CellRendererText()
+            tvColumn[i] = gtk.TreeViewColumn(col, self.treeView.cell[i])
+            tvColumn[i].add_attribute(self.treeView.cell[i], "text", i)
+            tvColumn[i].set_sizing(sizing[i])
+            self.treeView.append_column(tvColumn[i])
+
+        tvColumn[0].set_resizable(True)
+        tvColumn[0].set_min_width(500)
+        tvColumn[1].set_fixed_width(100)
+
+        scrollTree = gtk.ScrolledWindow()
+        scrollTree.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+        scrollTree.add(self.treeView)
+        scrollTree.show()
+
+        frameTree = gtk.Frame(FILE_TREE_NAME)
+        frameTree.add(scrollTree)
+        frameTree.show()
+
+        boxTree = gtk.HBox(False, 0)
+        boxTree.add(frameTree)
+        boxTree.show()
+        self.mainBox.pack_start(boxTree, True, True, 10)
+
+        self.treeView.show()
+
+    def addStatusBar(self):
+        statusBarTv = gtk.TextView()
+        self.statusBar = statusBarTv.get_buffer()
+
+        self.statusBar.set_text(STATUS_IDLE)
+
+        statusBarTv.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(BG_WINDOW))
+
+        boxStatusBar = gtk.HBox(False, 0)
+        boxStatusBar.add(statusBarTv)
+        boxStatusBar.show()
+        self.mainBox.pack_end(boxStatusBar, False, True, 10)
+
+        statusBarTv.show()
+
+    def __init__(self):
+        self.scanning = False
+
+        window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+
+        # window close
+        window.connect("delete_event", self.delete_event)
+        window.connect("destroy", self.destroy)
+
+        window.set_size_request(WINDOW_WIDTH, WINDOW_HEIGHT)
+        window.set_border_width(10)
+        window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(BG_WINDOW))
+
+        self.mainBox = gtk.VBox(False, 0)
+        window.add(self.mainBox)
+
+        self.addActions()
+        self.addTree()
+        self.addStatusBar()
 
         self.mainBox.show()
-
-        # tree list view
-        self.treeStore = gtk.TreeStore(str)
-
-        self.treeList = gtk.TreeView()
-
         window.show()
 
     def main(self):

@@ -3,37 +3,58 @@
 from os import listdir
 from os.path import join, getsize, isdir, islink, isfile
 
-class Scanner:
-    def onError(self):
-        print "An error occurred!"
+import threading
 
+import tree
+
+class Scanner():
     def scanDir(self, root, rootName):
-        tree = [rootName, 0, []]
+        data = [rootName, 0, []]
 
         for name in listdir(root):
             filename = join(root, name)
 
+            if (self.onProgress):
+                self.onProgress(name)
+
             if (isdir(filename) and not islink(filename)):
                 scan = self.scanDir(filename, name)
 
-                tree[2].append(scan)
+                data[2].append(scan)
 
-                tree[1] += scan[1]
+                data[1] += scan[1]
 
             elif (isfile(filename)):
                 size = getsize(filename)
 
-                tree[2].append([name, size, None])
+                data[2].append([name, size, None])
 
-                tree[1] += size
+                data[1] += size
 
-        return tree
+        return data
 
 
-    def scan(self):
-        self.tree = self.scanDir(self.dir, self.dir)
+    def run(self):
+        self.data = self.scanDir(self.dir, self.dir)
 
-    def __init__(self, theDir):
+        self.onProgress(self.statusDone)
+
+        self.onDone(self.data)
+
+    def __init__(
+            self,
+            theDir,
+            onProgress = None, onDone = None,
+            statusDone = None
+            ):
+
+        #threading.Thread.__init__(self)
+        #self.daemon = True
+
         self.dir = theDir
 
-        self.tree = []
+        self.data = []
+
+        self.onProgress = onProgress
+        self.onDone     = onDone
+        self.statusDone = statusDone
