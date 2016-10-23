@@ -7,6 +7,10 @@ pygtk.require('2.0')
 import gtk
 
 from scan import Scanner
+import tree
+
+WINDOW_WIDTH = 640
+WINDOW_HEIGHT = 500
 
 BTN_TITLE_SCAN = "Scan!"
 BTN_TITLE_STOP = "Stop"
@@ -25,6 +29,9 @@ class Base:
         gtk.main_quit()
 
     def startStopScan(self, widget, data = None):
+        """
+        either start or stop a scan depending on current status
+        """
         self.scanning = False if self.scanning else True
 
         self.setBtnStartStopLabel()
@@ -39,6 +46,36 @@ class Base:
 
             scanner.scan()
 
+            # add data to the tree view
+            tree.addTreeData(scanner.tree, self.treeStore)
+
+            self.treeView = gtk.TreeView(self.treeStore)
+
+            self.tvColumn = gtk.TreeViewColumn("File name")
+
+            self.treeView.append_column(self.tvColumn)
+
+            # create a CellRenndererText to render the tree data
+            self.cell = gtk.CellRendererText()
+
+            # add the cell to the tvColumn and allow it to expand
+            self.tvColumn.pack_start(self.cell, True)
+
+            """
+            set the cell "text" attribute to column 0 - retrieve text
+            from that column in treeStore
+            """
+            self.tvColumn.add_attribute(self.cell, "text", 0)
+
+            self.treeView.set_search_column(0)
+
+            self.tvColumn.set_sort_column_id(0)
+
+            self.mainBox.pack_start(self.treeView)
+
+            self.treeView.show()
+
+            # finished scanning
             self.scanning = False
 
             self.setBtnStartStopLabel()
@@ -47,26 +84,28 @@ class Base:
             print "Aborted scan!"
 
     def setBtnStartStopLabel(self):
+        """
+        set the title of the scan button depending on
+        whether we're scanning
+        """
         self.btnStartStop.set_label(
             BTN_TITLE_STOP if self.scanning else BTN_TITLE_SCAN
         )
 
-    def selectDirectory(self, widget, data = None):
-        print "Selecting directory %s" % data
-
-    def openDirSelect(self, widget, data = None):
-        self.dirSelect.show()
-
     def __init__(self):
         self.scanning = False
 
-        self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        window = gtk.Window(gtk.WINDOW_TOPLEVEL)
 
         # window close
-        self.window.connect("delete_event", self.delete_event)
-        self.window.connect("destroy", self.destroy)
+        window.connect("delete_event", self.delete_event)
+        window.connect("destroy", self.destroy)
 
-        self.window.set_border_width(10)
+        window.set_size_request(WINDOW_WIDTH, WINDOW_HEIGHT)
+        window.set_border_width(10)
+
+        self.mainBox = gtk.VBox(False, 0)
+        window.add(self.mainBox)
 
         actionBox = gtk.HButtonBox()
         actionBox.set_layout(gtk.BUTTONBOX_SPREAD)
@@ -91,9 +130,17 @@ class Base:
         self.btnStartStop.show()
 
         actionBox.show()
-        self.window.add(actionBox)
 
-        self.window.show()
+        self.mainBox.pack_start(actionBox)
+
+        self.mainBox.show()
+
+        # tree list view
+        self.treeStore = gtk.TreeStore(str)
+
+        self.treeList = gtk.TreeView()
+
+        window.show()
 
     def main(self):
         gtk.main()

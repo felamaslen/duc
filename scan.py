@@ -3,15 +3,6 @@
 from os import listdir
 from os.path import join, getsize, isdir, islink, isfile
 
-def listToString(strng):
-    if isinstance(strng, list):
-        return "[" + ", ".join(map(listToString, strng)) + "]"
-
-    return str(strng)
-
-def dump(theList):
-    print listToString(theList)
-
 class Scanner:
     def onError(self):
         print "An error occurred!"
