@@ -6,6 +6,8 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 
+from scan import Scanner
+
 BTN_TITLE_SCAN = "Scan!"
 BTN_TITLE_STOP = "Stop"
 
@@ -23,18 +25,26 @@ class Base:
         gtk.main_quit()
 
     def startStopScan(self, widget, data = None):
-        if (self.scanning):
-            # stop scanning
-            print "Aborted scan!"
-        else:
-            # start scanning
-            dir = self.get_dir_to_scan()
-
-            print "Scanning %s" % dir
-
         self.scanning = False if self.scanning else True
 
         self.setBtnStartStopLabel()
+
+        if (self.scanning):
+            # start scanning
+            theDir = self.get_dir_to_scan()
+
+            print "Scanning %s" % theDir
+
+            scanner = Scanner(theDir)
+
+            scanner.scan()
+
+            self.scanning = False
+
+            self.setBtnStartStopLabel()
+        else:
+            # stop scanning
+            print "Aborted scan!"
 
     def setBtnStartStopLabel(self):
         self.btnStartStop.set_label(
